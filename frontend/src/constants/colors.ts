@@ -1,0 +1,18 @@
+export const Colors = {
+  brandGreen: '#00704A',
+  brandGreenDark: '#1E3932',
+  brandGreenMid: '#00A862',
+  gold: '#CBA258',
+  goldLight: '#F5D78E',
+  cream: '#F2F0EB',
+  cream2: '#E8E4DC',
+  textPrimary: '#1E1B16',
+  textMuted: '#9A9184',
+  headerSub: '#8EBD9E',
+  orange: '#E8701A',
+  red: '#D4000D',
+  greenBg: '#E8F5EE',
+  orangeBg: '#FEF0E4',
+  redBg: '#FEEAEB',
+  white: '#FFFFFF',
+} as const;

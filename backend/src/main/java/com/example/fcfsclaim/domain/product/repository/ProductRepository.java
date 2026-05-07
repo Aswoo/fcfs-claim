@@ -12,11 +12,11 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
 
     List<Product> findByEventIdOrderByIdAsc(Long eventId);
 
-    @Modifying
+    @Modifying(clearAutomatically = true)
     @Query("UPDATE Product p SET p.stock = p.stock - 1 WHERE p.id = :productId AND p.stock > 0")
     int decrementStock(@Param("productId") Long productId);
 
-    @Modifying
+    @Modifying(clearAutomatically = true)
     @Query("UPDATE Product p SET p.stock = p.totalStock")
     void resetAllStock();
 }

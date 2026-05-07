@@ -1,0 +1,50 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fcfs-app
+  namespace: fcfs
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: fcfs-app
+  template:
+    metadata:
+      labels:
+        app: fcfs-app
+    spec:
+      containers:
+        - name: fcfs-app
+          image: docker.io/library/fcfs-claim-app:latest
+          imagePullPolicy: Never
+          env:
+            - name: SPRING_PROFILES_ACTIVE
+              value: docker
+            - name: DB_USERNAME
+              value: root
+            - name: DB_PASSWORD
+              value: password
+            - name: JAVA_OPTS
+              # limit = 512Mi
+              # 힙 한도  = 512Mi × 60% = 307Mi
+              # Non-Heap ≈ 200Mi
+              # 합계     ≈ 507Mi → 512Mi에 여유 있게 들어옴
+              value: >-
+                -XX:+UseContainerSupport
+                -XX:MaxRAMPercentage=60.0
+                -XX:MinRAMPercentage=50.0
+          ports:
+            - containerPort: 8081
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "512Mi"
+            limits:
+              cpu: "1000m"
+              memory: "512Mi"
+          readinessProbe:
+            httpGet:
+              path: /api/v1/events/1/products
+              port: 8081
+            initialDelaySeconds: 30
+            periodSeconds: 10

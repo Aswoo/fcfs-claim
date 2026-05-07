@@ -17,4 +17,5 @@ RUN ./gradlew bootJar --no-daemon
 FROM eclipse-temurin:17-jre
 WORKDIR /app
 COPY --from=build /app/build/libs/*.jar app.jar
-ENTRYPOINT ["java", "-jar", "app.jar"]
+ENV JAVA_OPTS="-XX:+UseContainerSupport -XX:MaxRAMPercentage=60.0 -XX:MinRAMPercentage=50.0 -XX:ActiveProcessorCount=2"
+ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar app.jar"]

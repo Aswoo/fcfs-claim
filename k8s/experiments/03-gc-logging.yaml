@@ -1,0 +1,53 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fcfs-app
+  namespace: fcfs
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: fcfs-app
+  template:
+    metadata:
+      labels:
+        app: fcfs-app
+    spec:
+      containers:
+        - name: fcfs-app
+          image: docker.io/library/fcfs-claim-app:latest
+          imagePullPolicy: Never
+          env:
+            - name: SPRING_PROFILES_ACTIVE
+              value: docker
+            - name: DB_USERNAME
+              value: root
+            - name: DB_PASSWORD
+              value: password
+            - name: JAVA_OPTS
+              # GC 로그 활성화 (정상 heap 크기)
+              # -Xlog:gc*              : GC 관련 모든 로그
+              # file=/tmp/gc.log       : 파일에 저장 (tail -f 로 실시간 확인 가능)
+              # time,uptime            : 타임스탬프 포함
+              # filecount=3,filesize=10m : 롤링 — 최대 3개 파일, 각 10MB
+              # -Xlog:gc+heap=debug    : GC 전후 힙 상세 정보
+              value: >-
+                -XX:+UseContainerSupport
+                -XX:MaxRAMPercentage=60.0
+                -Xlog:gc*:file=/tmp/gc.log:time,uptime,level,tags:filecount=3,filesize=10m
+                -Xlog:gc+heap=debug
+          ports:
+            - containerPort: 8081
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "512Mi"
+            limits:
+              cpu: "1000m"
+              memory: "512Mi"
+          readinessProbe:
+            httpGet:
+              path: /api/v1/events/1/products
+              port: 8081
+            initialDelaySeconds: 30
+            periodSeconds: 10

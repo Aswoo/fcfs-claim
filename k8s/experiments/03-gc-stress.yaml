@@ -1,0 +1,49 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fcfs-app
+  namespace: fcfs
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: fcfs-app
+  template:
+    metadata:
+      labels:
+        app: fcfs-app
+    spec:
+      containers:
+        - name: fcfs-app
+          image: docker.io/library/fcfs-claim-app:latest
+          imagePullPolicy: Never
+          env:
+            - name: SPRING_PROFILES_ACTIVE
+              value: docker
+            - name: DB_USERNAME
+              value: root
+            - name: DB_PASSWORD
+              value: password
+            - name: JAVA_OPTS
+              # GC 압박 실험 — 힙을 의도적으로 작게 설정
+              # Xms32m Xmx64m: heap이 64MB 한도에 빨리 도달해 GC가 매우 자주 발생
+              # Full GC(Stop-the-World)가 터지면 k6 p(95) 응답 시간이 급등하는 것을 볼 수 있다
+              value: >-
+                -Xms32m
+                -Xmx64m
+                -Xlog:gc*:file=/tmp/gc.log:time,uptime,level,tags
+          ports:
+            - containerPort: 8081
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "512Mi"
+            limits:
+              cpu: "1000m"
+              memory: "512Mi"   # 컨테이너 limit은 넉넉하게 (OOM은 Xmx 때문이 아니라 GC 부하를 보려는 것)
+          readinessProbe:
+            httpGet:
+              path: /api/v1/events/1/products
+              port: 8081
+            initialDelaySeconds: 30
+            periodSeconds: 10

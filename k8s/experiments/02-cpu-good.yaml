@@ -1,0 +1,48 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fcfs-app
+  namespace: fcfs
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: fcfs-app
+  template:
+    metadata:
+      labels:
+        app: fcfs-app
+    spec:
+      containers:
+        - name: fcfs-app
+          image: docker.io/library/fcfs-claim-app:latest
+          imagePullPolicy: Never
+          env:
+            - name: SPRING_PROFILES_ACTIVE
+              value: docker
+            - name: DB_USERNAME
+              value: root
+            - name: DB_PASSWORD
+              value: password
+            - name: JAVA_OPTS
+              # UseContainerSupport ON (기본값) + ActiveProcessorCount=2
+              # limit 1000m(1코어)이어도 JVM에게 2개로 인식시켜 ForkJoinPool 최소값(1) 이상을 확보
+              value: >-
+                -XX:+UseContainerSupport
+                -XX:MaxRAMPercentage=60.0
+                -XX:ActiveProcessorCount=2
+          ports:
+            - containerPort: 8081
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "512Mi"
+            limits:
+              cpu: "1000m"
+              memory: "512Mi"
+          readinessProbe:
+            httpGet:
+              path: /api/v1/events/1/products
+              port: 8081
+            initialDelaySeconds: 30
+            periodSeconds: 10

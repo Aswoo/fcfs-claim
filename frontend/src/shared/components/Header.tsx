@@ -1,10 +1,12 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../../constants/colors';
 
 export const Header = React.memo(() => {
+  const insets = useSafeAreaInsets();
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingTop: insets.top + 8 }]}>
       <View style={styles.logo} />
       <View style={styles.titleGroup}>
         <Text style={styles.title}>스타벅스 프리퀀시</Text>
@@ -19,11 +21,9 @@ export const Header = React.memo(() => {
 
 const styles = StyleSheet.create({
   container: {
-    height: 56,
     backgroundColor: Colors.brandGreenDark,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingTop: 14,
     paddingHorizontal: 16,
     paddingBottom: 12,
     gap: 8,

@@ -1,6 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, Animated } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import EventSource from 'react-native-sse';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../../constants/colors';
 import { RootStackParamList } from '../../navigation/AppNavigator';
 import { queueService } from '../../services/queueService';
@@ -9,6 +11,7 @@ import { BASE_URL } from '../../services/api';
 type Props = NativeStackScreenProps<RootStackParamList, 'Waiting'>;
 
 export const WaitingScreen = ({ navigation, route }: Props) => {
+  const insets = useSafeAreaInsets();
   const { userId, eventId } = route.params;
   const [rank, setRank] = useState(route.params.rank);
   const progressAnim = useRef(new Animated.Value(0)).current;
@@ -31,17 +34,17 @@ export const WaitingScreen = ({ navigation, route }: Props) => {
 
   // SSE로 ready 이벤트 수신, 폴링은 순위 표시용으로만 사용
   useEffect(() => {
-    const es = new EventSource(
+    const es = new EventSource<'ready'>(
       `${BASE_URL}/api/v1/queue/subscribe?userId=${userId}&eventId=${eventId}`
     );
 
-    es.addEventListener('ready', (e: MessageEvent) => {
-      const { token } = JSON.parse(e.data);
-      navigation.replace('Ready', { token, sequenceNumber: rank });
+    es.addEventListener('ready', (e) => {
+      const { token } = JSON.parse(e.data ?? '{}');
+      navigation.replace('Ready', { token, sequenceNumber: rank, eventId, userId });
       es.close();
     });
 
-    es.onerror = () => es.close();
+    es.addEventListener('error', () => es.close());
 
     return () => es.close();
   }, [userId, eventId]);
@@ -61,7 +64,7 @@ export const WaitingScreen = ({ navigation, route }: Props) => {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
         <Text style={styles.headerTitle}>대기 중</Text>
       </View>
 
@@ -107,7 +110,6 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.cream,
   },
   header: {
-    height: 56,
     backgroundColor: Colors.brandGreenDark,
     justifyContent: 'flex-end',
     paddingHorizontal: 16,

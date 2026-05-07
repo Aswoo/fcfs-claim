@@ -1,20 +1,23 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../../constants/colors';
 import { Product } from '../../types';
 
 interface Props {
   selectedProduct: Product | null;
   onClaim: () => void;
+  loading?: boolean;
 }
 
-export const BottomActionBar = React.memo(({ selectedProduct, onClaim }: Props) => {
-  const isActive = selectedProduct !== null;
+export const BottomActionBar = React.memo(({ selectedProduct, onClaim, loading = false }: Props) => {
+  const insets = useSafeAreaInsets();
+  const isActive = selectedProduct !== null && !loading;
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingBottom: insets.bottom + 8 }]}>
       <Text style={styles.hint}>
-        {isActive ? `${selectedProduct.name} 선택됨` : '상품을 선택해주세요'}
+        {loading ? '신청 중...' : isActive ? `${selectedProduct!.name} 선택됨` : '상품을 선택해주세요'}
       </Text>
       <TouchableOpacity
         style={[styles.button, isActive ? styles.buttonActive : styles.buttonDisabled]}
@@ -22,9 +25,13 @@ export const BottomActionBar = React.memo(({ selectedProduct, onClaim }: Props) 
         disabled={!isActive}
         activeOpacity={0.9}
       >
-        <Text style={[styles.buttonText, isActive ? styles.buttonTextActive : styles.buttonTextDisabled]}>
-          선착순 신청하기
-        </Text>
+        {loading ? (
+          <ActivityIndicator size="small" color={Colors.white} />
+        ) : (
+          <Text style={[styles.buttonText, isActive ? styles.buttonTextActive : styles.buttonTextDisabled]}>
+            선착순 신청하기
+          </Text>
+        )}
       </TouchableOpacity>
     </View>
   );
@@ -32,11 +39,9 @@ export const BottomActionBar = React.memo(({ selectedProduct, onClaim }: Props) 
 
 const styles = StyleSheet.create({
   container: {
-    height: 80,
     backgroundColor: Colors.white,
     paddingTop: 10,
     paddingHorizontal: 14,
-    paddingBottom: 16,
     gap: 7,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: -4 },

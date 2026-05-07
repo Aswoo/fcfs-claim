@@ -4,6 +4,7 @@ import com.example.fcfsclaim.domain.claim.dto.ClaimRequest;
 import com.example.fcfsclaim.domain.claim.dto.ClaimResponse;
 import com.example.fcfsclaim.domain.claim.entity.Claim;
 import com.example.fcfsclaim.domain.claim.repository.ClaimRepository;
+import com.example.fcfsclaim.domain.product.repository.ProductRepository;
 import com.example.fcfsclaim.domain.queue.entity.QueueToken;
 import com.example.fcfsclaim.domain.queue.repository.QueueTokenRepository;
 import lombok.RequiredArgsConstructor;
@@ -21,12 +22,13 @@ public class ClaimService {
     private final StringRedisTemplate redis;
     private final ClaimRepository claimRepository;
     private final QueueTokenRepository queueTokenRepository;
+    private final ProductRepository productRepository;
 
     @Transactional
     public ClaimResponse claim(ClaimRequest request) {
         String tokenRedisKey = "token:" + request.eventId() + ":" + request.token();
 
-        // 1. Redis에서 토큰 유효성 검증 (빠른 경로)
+        // 1. Redis 토큰 유효성 검증
         String storedUserId = redis.opsForValue().get(tokenRedisKey);
         if (storedUserId == null) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "유효하지 않거나 만료된 토큰입니다.");
@@ -35,14 +37,20 @@ public class ClaimService {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "토큰 소유자가 다릅니다.");
         }
 
-        // 2. 중복 클레임 방지 (DB unique constraint)
+        // 2. 중복 수령 방지
         try {
-            claimRepository.save(Claim.of(request.eventId(), request.userId(), request.token()));
+            claimRepository.save(Claim.of(request.eventId(), request.userId(), request.productId(), request.token()));
         } catch (DataIntegrityViolationException e) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "이미 수령하셨습니다.");
         }
 
-        // 3. 토큰 소진 처리
+        // 3. 선택한 상품 재고 차감 (stock > 0 조건부, 실패 시 트랜잭션 롤백)
+        int updated = productRepository.decrementStock(request.productId());
+        if (updated == 0) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "해당 상품의 재고가 소진되었습니다.");
+        }
+
+        // 4. 토큰 소진
         redis.delete(tokenRedisKey);
         queueTokenRepository.findByToken(request.token())
                 .ifPresent(QueueToken::markUsed);

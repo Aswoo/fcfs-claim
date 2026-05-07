@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Animated } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../../constants/colors';
 import { RootStackParamList } from '../../navigation/AppNavigator';
 
@@ -9,7 +10,8 @@ type Props = NativeStackScreenProps<RootStackParamList, 'Ready'>;
 const COUNTDOWN_SECONDS = 300; // 5분
 
 export const ReadyScreen = ({ navigation, route }: Props) => {
-  const { sequenceNumber } = route.params;
+  const insets = useSafeAreaInsets();
+  const { sequenceNumber, token, eventId, userId } = route.params;
   const [remaining, setRemaining] = React.useState(COUNTDOWN_SECONDS);
   const scaleAnim = useRef(new Animated.Value(0.8)).current;
 
@@ -35,15 +37,15 @@ export const ReadyScreen = ({ navigation, route }: Props) => {
   }, []);
 
   const handleGoToClaim = useCallback(() => {
-    navigation.navigate('Claim');
-  }, [navigation]);
+    navigation.navigate('Claim', { token, eventId, userId });
+  }, [navigation, token, eventId, userId]);
 
   const minutes = Math.floor(remaining / 60);
   const seconds = remaining % 60;
   const timeStr = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingTop: insets.top + 48, paddingBottom: insets.bottom + 24 }]}>
       <View style={styles.content}>
         <Animated.View style={[styles.badge, { transform: [{ scale: scaleAnim }] }]}>
           <Text style={styles.badgeNumber}>{sequenceNumber}</Text>
@@ -80,8 +82,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.cream,
     justifyContent: 'space-between',
-    paddingTop: 100,
-    paddingBottom: 48,
     paddingHorizontal: 24,
   },
   content: {

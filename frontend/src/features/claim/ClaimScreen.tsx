@@ -1,7 +1,10 @@
-import React, { useState, useCallback } from 'react';
-import { View, FlatList, StyleSheet, Alert, ListRenderItem } from 'react-native';
+import React, { useState, useCallback, useEffect } from 'react';
+import { View, FlatList, StyleSheet, Alert, ListRenderItem, ActivityIndicator, Text } from 'react-native';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Colors } from '../../constants/colors';
 import { Product } from '../../types';
+import { RootStackParamList } from '../../navigation/AppNavigator';
+import { claimService } from '../../services/claimService';
 import {
   Header,
   Banner,
@@ -10,73 +13,58 @@ import {
   BottomActionBar,
 } from '../../shared/components';
 
-const MOCK_PRODUCTS: Product[] = [
-  {
-    id: 1,
-    name: '스타벅스 써머 텀블러',
-    desc: '한정 수량 20개',
-    stock: 15,
-    total: 20,
-    status: 'available',
-    imageColor: '#D4E8D0',
-    imageColorEnd: '#A8D5A2',
-  },
-  {
-    id: 2,
-    name: '스타벅스 에코백',
-    desc: '한정 수량 20개',
-    stock: 4,
-    total: 20,
-    status: 'low_stock',
-    imageColor: '#F5E6C8',
-    imageColorEnd: '#E8D0A0',
-  },
-  {
-    id: 3,
-    name: '스타벅스 머그컵',
-    desc: '한정 수량 20개',
-    stock: 0,
-    total: 20,
-    status: 'sold_out',
-    imageColor: '#E8D5D5',
-    imageColorEnd: '#D4B0B0',
-  },
-  {
-    id: 4,
-    name: '스타벅스 키링',
-    desc: '한정 수량 20개',
-    stock: 18,
-    total: 20,
-    status: 'available',
-    imageColor: '#D5D8E8',
-    imageColorEnd: '#B0B8D4',
-  },
-];
+type Props = NativeStackScreenProps<RootStackParamList, 'Claim'>;
 
 const ITEM_HEIGHT = 96;
 
-export const ClaimScreen = () => {
+export const ClaimScreen = ({ navigation, route }: Props) => {
+  const { token, eventId, userId } = route.params;
+
+  const [products, setProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [claiming, setClaiming] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
 
+  useEffect(() => {
+    claimService.getProducts(eventId).then(setProducts).finally(() => setLoading(false));
+  }, [eventId]);
+
   const handleSelect = useCallback((product: Product) => {
+    if (product.status === 'sold_out') return;
     setSelectedProduct(prev => (prev?.id === product.id ? null : product));
   }, []);
 
-  const handleClaim = useCallback(() => {
-    if (!selectedProduct) return;
-    Alert.alert(
-      '신청 완료',
-      `${selectedProduct.name} 선착순 신청이 완료되었습니다!`,
-      [{ text: '확인', onPress: () => setSelectedProduct(null) }]
-    );
-  }, [selectedProduct]);
+  const handleClaim = useCallback(async () => {
+    if (!selectedProduct || claiming) return;
+    setClaiming(true);
+    try {
+      await claimService.claim(userId, eventId, token, selectedProduct.id);
+      navigation.replace('Success', { productName: selectedProduct.name });
+    } catch (err: any) {
+      const status = err?.response?.status;
+      const msg = err?.response?.data?.error;
+      if (status === 409) {
+        Alert.alert('알림', msg ?? '재고가 소진되었거나 이미 수령하셨습니다.', [
+          { text: '확인', onPress: () => {
+            // 재고 갱신
+            claimService.getProducts(eventId).then(setProducts);
+            setSelectedProduct(null);
+          }},
+        ]);
+      } else if (status === 401) {
+        Alert.alert('토큰 만료', '입장 시간이 만료되었습니다.', [
+          { text: '확인', onPress: () => navigation.navigate('Enter') },
+        ]);
+      } else {
+        Alert.alert('오류', '잠시 후 다시 시도해주세요.');
+      }
+    } finally {
+      setClaiming(false);
+    }
+  }, [selectedProduct, claiming, userId, eventId, token, navigation]);
 
   const getItemLayout = useCallback(
-    (_: unknown, index: number) => ({
-      length: ITEM_HEIGHT,
-      offset: ITEM_HEIGHT * index,
-      index,
-    }),
+    (_: unknown, index: number) => ({ length: ITEM_HEIGHT, offset: ITEM_HEIGHT * index, index }),
     []
   );
 
@@ -93,13 +81,22 @@ export const ClaimScreen = () => {
     [selectedProduct, handleSelect]
   );
 
-  const availableCount = MOCK_PRODUCTS.filter(p => p.status !== 'sold_out').length;
+  const availableCount = products.filter(p => p.status !== 'sold_out').length;
+
+  if (loading) {
+    return (
+      <View style={styles.center}>
+        <ActivityIndicator size="large" color={Colors.brandGreen} />
+        <Text style={styles.loadingText}>상품 목록 불러오는 중...</Text>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
       <Header />
       <FlatList
-        data={MOCK_PRODUCTS}
+        data={products}
         keyExtractor={keyExtractor}
         renderItem={renderItem}
         getItemLayout={getItemLayout}
@@ -108,14 +105,14 @@ export const ClaimScreen = () => {
             <Banner />
             <SectionHeader
               title="리워드 상품"
-              count={`${availableCount}/${MOCK_PRODUCTS.length}개 신청 가능`}
+              count={`${availableCount}/${products.length}개 신청 가능`}
             />
           </>
         }
         contentContainerStyle={styles.listContent}
         style={styles.list}
       />
-      <BottomActionBar selectedProduct={selectedProduct} onClaim={handleClaim} />
+      <BottomActionBar selectedProduct={selectedProduct} onClaim={handleClaim} loading={claiming} />
     </View>
   );
 };
@@ -131,5 +128,16 @@ const styles = StyleSheet.create({
   listContent: {
     paddingTop: 8,
     paddingBottom: 16,
+  },
+  center: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+    backgroundColor: Colors.cream,
+  },
+  loadingText: {
+    fontSize: 13,
+    color: Colors.textMuted,
   },
 });

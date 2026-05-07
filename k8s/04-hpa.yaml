@@ -1,0 +1,30 @@
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: fcfs-app-hpa
+  namespace: fcfs
+spec:
+  # 어떤 Deployment를 스케일할지
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: fcfs-app
+
+  minReplicas: 1   # 부하 없을 때 최소 1개 유지
+  maxReplicas: 5   # 최대 5개까지 자동 확장
+
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          # 파드 평균 CPU 사용률이 50% 넘으면 파드 추가
+          # 예: 파드 1개가 CPU 80% → 50% 기준 초과 → 파드 2개로 늘림
+          averageUtilization: 50
+
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 15   # 15초 연속 초과 시 스케일 업 (너무 민감하지 않게)
+    scaleDown:
+      stabilizationWindowSeconds: 60   # 60초 연속 여유 시 스케일 다운 (급격한 축소 방지)

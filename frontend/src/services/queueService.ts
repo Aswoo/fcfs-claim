@@ -20,4 +20,8 @@ export const queueService = {
     });
     await Promise.all(requests);
   },
+
+  reset: async () => {
+    await api.post('/api/v1/admin/reset');
+  },
 };

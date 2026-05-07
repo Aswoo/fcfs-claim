@@ -26,16 +26,20 @@ public class Claim {
     @Column(name = "user_id", nullable = false)
     private Long userId;
 
+    @Column(name = "product_id", nullable = false)
+    private Long productId;
+
     @Column(nullable = false, length = 36)
     private String token;
 
     @Column(name = "claimed_at", nullable = false)
     private LocalDateTime claimedAt;
 
-    public static Claim of(Long eventId, Long userId, String token) {
+    public static Claim of(Long eventId, Long userId, Long productId, String token) {
         Claim c = new Claim();
         c.eventId = eventId;
         c.userId = userId;
+        c.productId = productId;
         c.token = token;
         c.claimedAt = LocalDateTime.now();
         return c;

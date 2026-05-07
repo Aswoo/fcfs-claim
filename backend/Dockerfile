@@ -1,5 +1,5 @@
 # Stage 1: 빌드
-FROM eclipse-temurin:17-jdk-alpine AS build
+FROM eclipse-temurin:17-jdk AS build
 WORKDIR /app
 
 # 의존성 캐시 레이어 (gradle 파일 먼저 복사)

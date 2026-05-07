@@ -2,6 +2,7 @@ import React, { useCallback, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../../constants/colors';
 import { RootStackParamList } from '../../navigation/AppNavigator';
 import { queueService } from '../../services/queueService';
@@ -12,8 +13,10 @@ const USER_ID = Math.floor(Math.random() * 900000) + 100000; // 임시 userId
 type Props = NativeStackScreenProps<RootStackParamList, 'Enter'>;
 
 export const EnterScreen = ({ navigation }: Props) => {
+  const insets = useSafeAreaInsets();
   const [loading, setLoading] = useState(false);
   const [loadingWith20, setLoadingWith20] = useState(false);
+  const [resetting, setResetting] = useState(false);
 
   const handleEnter = useCallback(async () => {
     setLoading(true);
@@ -26,6 +29,31 @@ export const EnterScreen = ({ navigation }: Props) => {
       setLoading(false);
     }
   }, [navigation]);
+
+  const handleReset = useCallback(() => {
+    Alert.alert(
+      '테스트 초기화',
+      '수령 기록, 대기열, 재고를 모두 초기화합니다.\n반복 테스트에만 사용하세요.',
+      [
+        { text: '취소', style: 'cancel' },
+        {
+          text: '초기화',
+          style: 'destructive',
+          onPress: async () => {
+            setResetting(true);
+            try {
+              await queueService.reset();
+              Alert.alert('완료', '초기화되었습니다.');
+            } catch {
+              Alert.alert('오류', '초기화에 실패했습니다.');
+            } finally {
+              setResetting(false);
+            }
+          },
+        },
+      ]
+    );
+  }, []);
 
   const handleEnterAfter20 = useCallback(async () => {
     setLoadingWith20(true);
@@ -43,7 +71,7 @@ export const EnterScreen = ({ navigation }: Props) => {
   return (
     <LinearGradient
       colors={[Colors.brandGreenDark, '#2C5234']}
-      style={styles.container}
+      style={[styles.container, { paddingTop: insets.top + 32, paddingBottom: insets.bottom + 24 }]}
     >
       <View style={styles.content}>
         <Text style={styles.label}>LIMITED EDITION</Text>
@@ -58,6 +86,18 @@ export const EnterScreen = ({ navigation }: Props) => {
       </View>
 
       <View style={styles.bottom}>
+        <TouchableOpacity
+          style={styles.resetButton}
+          onPress={handleReset}
+          activeOpacity={0.7}
+          disabled={resetting || loading || loadingWith20}
+        >
+          {resetting
+            ? <ActivityIndicator size="small" color="rgba(255,255,255,0.4)" />
+            : <Text style={styles.resetButtonText}>테스트 초기화</Text>
+          }
+        </TouchableOpacity>
+
         <TouchableOpacity
           style={styles.precedeButton}
           onPress={handleEnterAfter20}
@@ -91,8 +131,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     justifyContent: 'space-between',
-    paddingTop: 80,
-    paddingBottom: 48,
     paddingHorizontal: 24,
   },
   content: {
@@ -142,6 +180,17 @@ const styles = StyleSheet.create({
   },
   bottom: {
     gap: 12,
+  },
+  resetButton: {
+    alignSelf: 'center',
+    paddingVertical: 6,
+    paddingHorizontal: 14,
+  },
+  resetButtonText: {
+    fontSize: 11,
+    fontWeight: '400',
+    color: 'rgba(255,255,255,0.35)',
+    textDecorationLine: 'underline',
   },
   precedeButton: {
     height: 44,

@@ -1,0 +1,58 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fcfs-app
+  namespace: fcfs
+spec:
+  replicas: 1          # 시작은 1개, HPA가 필요 시 자동으로 늘림
+  selector:
+    matchLabels:
+      app: fcfs-app
+  template:
+    metadata:
+      labels:
+        app: fcfs-app
+    spec:
+      containers:
+        - name: fcfs-app
+          image: docker.io/library/fcfs-claim-app:latest
+          imagePullPolicy: Never
+          env:
+            - name: SPRING_PROFILES_ACTIVE
+              value: docker
+            - name: DB_USERNAME
+              value: root
+            - name: DB_PASSWORD
+              value: password
+          ports:
+            - containerPort: 8081
+          # HPA가 동작하려면 resources.requests 가 반드시 있어야 함
+          # CPU 사용률 = 실제 사용 CPU / requests.cpu 로 계산
+          resources:
+            requests:
+              cpu: "500m"       # 0.5 코어 보장 요청
+              memory: "512Mi"
+            limits:
+              cpu: "1000m"      # 최대 1 코어
+              memory: "1Gi"
+          # 앱이 뜨기 전에 트래픽 안 보내게 readiness 체크
+          readinessProbe:
+            httpGet:
+              path: /api/v1/events/1/products
+              port: 8081
+            initialDelaySeconds: 30
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: fcfs-app
+  namespace: fcfs
+spec:
+  selector:
+    app: fcfs-app
+  ports:
+    - port: 8081
+      targetPort: 8081
+  # LoadBalancer: Docker Desktop에서 localhost로 직접 접근 가능하게 함
+  type: LoadBalancer

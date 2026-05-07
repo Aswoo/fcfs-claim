@@ -5,12 +5,14 @@ import { EnterScreen } from '../features/queue/EnterScreen';
 import { WaitingScreen } from '../features/queue/WaitingScreen';
 import { ReadyScreen } from '../features/queue/ReadyScreen';
 import { ClaimScreen } from '../features/claim/ClaimScreen';
+import { SuccessScreen } from '../features/claim/SuccessScreen';
 
 export type RootStackParamList = {
   Enter: undefined;
   Waiting: { rank: number; eventId: number; userId: number };
-  Ready: { token: string; sequenceNumber: number };
-  Claim: undefined;
+  Ready: { token: string; sequenceNumber: number; eventId: number; userId: number };
+  Claim: { token: string; eventId: number; userId: number };
+  Success: { productName: string };
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -23,6 +25,7 @@ export const AppNavigator = () => {
         <Stack.Screen name="Waiting" component={WaitingScreen} />
         <Stack.Screen name="Ready" component={ReadyScreen} />
         <Stack.Screen name="Claim" component={ClaimScreen} />
+        <Stack.Screen name="Success" component={SuccessScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );

@@ -1,0 +1,66 @@
+# PersistentVolumeClaim: MySQL 데이터를 파드 재시작 후에도 보존하는 디스크 공간 요청
+# K8s에게 "1Gi짜리 저장 공간 하나 줘"라고 요청하는 것
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mysql-pvc
+  namespace: fcfs
+spec:
+  accessModes:
+    - ReadWriteOnce   # 동시에 1개 파드만 마운트 가능 (MySQL은 단일 파드라 OK)
+                      # ReadWriteMany는 NFS처럼 여러 파드 동시 마운트 가능한 스토리지에서 사용
+  resources:
+    requests:
+      storage: 1Gi    # 1GB 요청. StorageClass가 실제 PV를 자동 생성해줌
+  # storageClassName 생략 시 default StorageClass(standard) 사용
+  # Docker Desktop K8s: rancher.io/local-path → 노드 로컬 파일시스템에 디렉토리 생성
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mysql
+  namespace: fcfs
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mysql
+  template:
+    metadata:
+      labels:
+        app: mysql
+    spec:
+      containers:
+        - name: mysql
+          image: mysql:8.0
+          env:
+            - name: MYSQL_DATABASE
+              value: fcfs_claim
+            - name: MYSQL_ROOT_PASSWORD
+              value: password
+          ports:
+            - containerPort: 3306
+          volumeMounts:
+            - name: mysql-data
+              mountPath: /var/lib/mysql   # MySQL이 데이터를 저장하는 경로
+          readinessProbe:
+            exec:
+              command: ["mysqladmin", "ping", "-h", "localhost"]
+            initialDelaySeconds: 20
+            periodSeconds: 5
+      volumes:
+        - name: mysql-data
+          persistentVolumeClaim:
+            claimName: mysql-pvc   # 위에서 만든 PVC를 이 볼륨으로 사용
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mysql
+  namespace: fcfs
+spec:
+  selector:
+    app: mysql
+  ports:
+    - port: 3306
+      targetPort: 3306

@@ -14,7 +14,9 @@
 6. [로컬 실행](#로컬-실행)
 7. [Kubernetes 배포](#kubernetes-배포)
 8. [부하 테스트 (k6)](#부하-테스트-k6)
-9. [프로젝트 구조](#프로젝트-구조)
+9. [테스트 코드](#테스트-코드)
+10. [JVM 실험](#jvm-실험)
+11. [프로젝트 구조](#프로젝트-구조)
 
 ---
 
@@ -245,36 +247,20 @@ npx expo start --port 8082
 - Docker Desktop (Kubernetes 활성화)
 - kubectl
 
-### 이미지 빌드 및 K8s containerd에 로드
-
-Docker Desktop K8s는 Docker 데몬과 다른 containerd 네임스페이스(`k8s.io`)를 사용하므로, 직접 import가 필요하다.
-
-```bash
-# 1. 이미지 빌드
-cd backend
-./gradlew build -x test
-docker build -t fcfs-claim-app:latest .
-
-# 2. tar 저장
-docker save fcfs-claim-app:latest -o /tmp/fcfs-claim-app.tar
-
-# 3. K8s 노드에 debug 파드 생성
-kubectl debug node/desktop-control-plane --image=alpine --profile=sysadmin -- sleep 300
-
-# 4. tar 복사 후 import (파드 이름은 위 명령 출력에서 확인)
-kubectl cp /tmp/fcfs-claim-app.tar <debug-pod-name>:/host/tmp/fcfs-claim-app.tar
-kubectl exec <debug-pod-name> -- chroot /host ctr -n k8s.io images import /tmp/fcfs-claim-app.tar
-
-# 5. 파드 정리
-kubectl delete pod <debug-pod-name>
-```
-
-> 배포 스크립트 `k8s/deploy.sh`로 한 번에 실행 가능.
-
 ### 배포
 
 ```bash
+# 이미지 빌드 (Docker Desktop K8s는 로컬 이미지를 직접 사용)
+docker build -t fcfs-claim-app:latest ./backend
+
+# 전체 리소스 배포
 kubectl apply -f k8s/
+```
+
+또는 배포 스크립트 사용:
+
+```bash
+./k8s/deploy.sh
 ```
 
 ### 확인
@@ -305,39 +291,98 @@ brew install k6
 | 파일 | 목적 |
 |------|------|
 | `01_queue_stress.js` | 대기열 입장 API 부하 테스트 (100 VU, 20초) |
-| `02_claim_race.js` | 동시 claim 레이스 컨디션 검증 (setup에서 토큰 일괄 발급 후 동시 요청) |
-| `03_full_flow.js` | 입장 → 폴링 → 수령 전체 흐름 (20 VU, 각 1회) |
-| `04_lifecycle_boundary.js` | 이벤트 생명주기 경계 테스트 (SCHEDULED/ACTIVE/ENDED 각 단계 검증) |
-| `05_expired_token.js` | 만료 토큰 거부 테스트 (Admin API로 즉시 만료 시뮬레이션) |
+| `02_claim_race.js` | 동시 claim 레이스 컨디션 검증 |
+| `03_full_flow.js` | 입장 → 폴링 → 수령 전체 흐름 |
+| `04_lifecycle_boundary.js` | 이벤트 생명주기 경계 테스트 |
+| `05_expired_token.js` | 만료 토큰 거부 테스트 |
 
 ### 실행 순서
 
 ```bash
-# 1. 이벤트 생명주기 경계 (자체 상태 초기화 포함)
 k6 run k6/04_lifecycle_boundary.js
-
-# 2. 동시 클레임 레이스 (이벤트 ACTIVE 대기 자동 처리)
 k6 run k6/02_claim_race.js
-
-# 3. 전체 흐름 통합 (이벤트 ACTIVE 대기 자동 처리)
 k6 run k6/03_full_flow.js
-
-# 4. 만료 토큰 거부
 k6 run k6/05_expired_token.js
-
-# 5. 대기열 입장 부하 (이벤트 ACTIVE 상태에서 실행)
 k6 run k6/01_queue_stress.js
 ```
 
-> `02`, `03`, `05`는 이벤트가 ACTIVE가 아닐 경우 setup()에서 자동으로 최대 120초 대기한다.
+> 자세한 내용 → [`docs/k6-load-test.md`](docs/k6-load-test.md)
 
-### 주요 검증 항목
+---
 
-| 테스트 | 검증 내용 |
-|--------|----------|
-| `02_claim_race.js` | `claim_error == 0` (예상치 못한 오류 없음) |
-| `04_lifecycle_boundary.js` | `lifecycle_errors == 0` (각 단계 동작 정확성) |
-| `05_expired_token.js` | `token_errors == 0` (만료 토큰 → 반드시 401) |
+## 테스트 코드
+
+```bash
+./gradlew test
+```
+
+### 테스트 구성
+
+| 클래스 | 방식 | 케이스 수 | 핵심 검증 |
+|--------|------|-----------|-----------|
+| `ClaimServiceTest` | Mockito | 6 | 토큰 검증, 중복 수령, 재고 소진 시 Redis 미삭제 |
+| `QueueServiceTest` | Mockito | 6 | 대기열 입장, 상태 조회, 토큰 검증 |
+| `ProductRepositoryTest` | `@DataJpaTest` (H2) | 3 | 재고 차감 쿼리, **100스레드 동시성 검증** |
+| `EventLifecycleServiceTest` | Mockito | 4 | ShedLock 락 경합 스킵, 이벤트 상태 전이 |
+| `ClaimControllerTest` | `@WebMvcTest` | 3 | HTTP 상태 코드 매핑 |
+
+### 테스트 계층 전략
+
+```
+단위 테스트 (Mockito)       → 서비스 비즈니스 로직. Redis/DB 전부 Mock
+Repository 테스트           → JPA 커스텀 쿼리. H2 실제 실행
+Controller 슬라이스 테스트   → HTTP 레이어. MockMvc
+```
+
+통합 테스트(`@SpringBootTest`)는 Redis 실서버가 필요하고 무거워서 제외했다.
+
+> 자세한 내용 → [`docs/testing.md`](docs/testing.md)
+
+---
+
+## JVM 실험
+
+K8s 컨테이너 환경에서 실제로 발생하는 JVM 문제를 재현하고 해결하는 실습.
+
+### 실험 목록
+
+| 실험 | 재현 내용 | 핵심 학습 |
+|------|-----------|-----------|
+| `oom-bad` → `oom-good` | OOMKilled 재현 후 해결 | Heap + Non-Heap 합계가 limit 초과하면 OS가 프로세스 강제 종료 |
+| `cpu-bad` → `cpu-good` | CPU 잘못 인식 재현 후 해결 | `UseContainerSupport` OFF 시 노드 전체 CPU를 봄 |
+| `gc-stress` | Full GC 유발 | 힙 압박 시 Stop-the-World → p(95) 응답 시간 급등 |
+
+### 실행 방법
+
+```bash
+# 실험 스크립트 (YAML 적용 + k6 자동 실행 + 결과 출력)
+./k8s/experiments/run.sh
+
+# 실험 1 — OOMKilled
+터미널 A: ./k8s/experiments/run.sh oom-bad    # k6 자동 실행
+터미널 B: ./k8s/experiments/run.sh oom-watch  # 파드 상태 3초마다 polling
+
+# 실험 3 — GC
+터미널 A: ./k8s/experiments/run.sh gc-stress  # k6 자동 실행
+터미널 B: ./k8s/experiments/run.sh gc-tail    # GC 로그 실시간 스트리밍
+```
+
+### OOMKilled 확인 포인트
+
+```bash
+# 1. 죽기 직전 로그 — 에러 메시지 없이 끊기면 OOMKilled 의심
+kubectl logs -n fcfs <파드> --previous
+
+# 2. 원인 확인
+kubectl describe pod -n fcfs <파드> | grep -A 6 "Last State"
+# Reason: OOMKilled / Exit Code: 137
+
+# 3. 현재 메모리 압박 수준
+kubectl top pod -n fcfs
+# limit 대비 80% 넘으면 위험
+```
+
+> 자세한 내용 → [`docs/jvm-oom-experiment.md`](docs/jvm-oom-experiment.md)
 
 ---
 
@@ -346,18 +391,24 @@ k6 run k6/01_queue_stress.js
 ```
 fcfs-claim/
 ├── backend/                     # Spring Boot 백엔드
-│   └── src/main/java/
-│       └── com/example/fcfsclaim/
-│           ├── common/
-│           │   ├── config/      # RedisConfig, SchedulerConfig
-│           │   ├── init/        # DataInitializer (초기 데이터)
-│           │   └── response/    # ApiResponse 공통 응답 래퍼
+│   └── src/
+│       ├── main/java/com/example/fcfsclaim/
+│       │   ├── common/
+│       │   │   ├── config/      # RedisConfig, SchedulerConfig
+│       │   │   ├── init/        # DataInitializer (초기 데이터)
+│       │   │   └── response/    # ApiResponse 공통 응답 래퍼
+│       │   └── domain/
+│       │       ├── admin/       # 테스트용 reset / force-* API
+│       │       ├── claim/       # 상품 수령 (재고 차감)
+│       │       ├── event/       # 이벤트 생명주기, 상태 조회
+│       │       ├── product/     # 상품 목록
+│       │       └── queue/       # 대기열, SSE, 토큰, Pub/Sub
+│       └── test/                # 단위/슬라이스 테스트
 │           └── domain/
-│               ├── admin/       # 테스트용 reset / force-* API
-│               ├── claim/       # 상품 수령 (재고 차감)
-│               ├── event/       # 이벤트 생명주기, 상태 조회
-│               ├── product/     # 상품 목록
-│               └── queue/       # 대기열, SSE, 토큰, Pub/Sub
+│               ├── claim/       # ClaimServiceTest, ClaimControllerTest
+│               ├── event/       # EventLifecycleServiceTest
+│               ├── product/     # ProductRepositoryTest (동시성)
+│               └── queue/       # QueueServiceTest
 │
 ├── frontend/                    # React Native (Expo)
 │   └── src/
@@ -380,18 +431,31 @@ fcfs-claim/
 │   ├── 02-redis.yaml
 │   ├── 03-app.yaml              # fcfs-app Deployment + Service
 │   ├── 04-hpa.yaml              # HorizontalPodAutoscaler
-│   └── deploy.sh
+│   ├── deploy.sh
+│   └── experiments/             # JVM 실험용 매니페스트
+│       ├── 01-oom-bad.yaml      # OOMKilled 재현 (256Mi + MaxRAM=90%)
+│       ├── 01-oom-good.yaml     # OOMKilled 해결 (512Mi + MaxRAM=60%)
+│       ├── 02-cpu-bad.yaml      # CPU 잘못 인식 (UseContainerSupport OFF)
+│       ├── 02-cpu-good.yaml     # CPU 올바른 설정
+│       ├── 03-gc-logging.yaml   # GC 로그 활성화
+│       ├── 03-gc-stress.yaml    # GC 압박 (힙 64MB 강제 축소)
+│       └── run.sh               # 실험 자동화 스크립트
 │
 ├── nginx/nginx.conf             # 리버스 프록시 + Rate Limit 설정
 ├── docker-compose.yml           # 로컬 다중 인스턴스 환경
+├── plan/                        # 구현/실험 계획 문서
+│   ├── test-plan.md
+│   └── jvm-experiments.md
 └── docs/                        # 설계 문서 및 학습 자료
     ├── architecture.md          # 컴포넌트 구조, 핵심 설계 결정
     ├── domain-model.md          # 엔티티 상세, 도메인 간 흐름
     ├── db-schema.md             # 테이블 정의, Redis 키 구조
+    ├── testing.md               # 테스트 전략, 계층별 설명
+    ├── jvm-oom-experiment.md    # OOMKilled 실제 로그 기반 분석 가이드
+    ├── k6-load-test.md          # 부하 테스트 스크립트 설명
     ├── docker-guide.md          # Docker 입문 가이드
     ├── kubernetes-guide.md      # K8s 입문 + 실제 문제 해결
     ├── pubsub-and-expiry.md     # Redis Pub/Sub & 토큰 만료 배치
     ├── redis-migration.md       # 인메모리 → Redis 전환 과정
-    ├── k6-load-test.md          # 부하 테스트 스크립트 설명
     └── interview-qa.md          # 면접 Q&A
 ```

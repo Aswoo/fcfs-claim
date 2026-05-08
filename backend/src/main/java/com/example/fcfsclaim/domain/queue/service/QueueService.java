@@ -13,8 +13,10 @@ import lombok.extern.slf4j.Slf4j;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ZSetOperations;
+import org.springframework.http.HttpStatus;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Duration;
 import java.util.Set;
@@ -42,6 +44,10 @@ public class QueueService {
     }
 
     public EnterResponse enter(Long userId, Long eventId) {
+        if (!activeEventCache.getAll().contains(eventId)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "진행 중인 이벤트가 없습니다.");
+        }
+
         String key = waitingKey(eventId);
         redis.opsForZSet().addIfAbsent(key, userId.toString(), System.currentTimeMillis());
 

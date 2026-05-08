@@ -59,4 +59,10 @@ public class Event {
     public void rescheduleToScheduled() {
         this.status = EventStatus.SCHEDULED;
     }
+
+    // 테스트용: ACTIVE 복구 + end_at 24시간 연장 (RecoveryService가 재종료하지 않도록)
+    public void resetForTest() {
+        this.status = EventStatus.ACTIVE;
+        this.endAt = LocalDateTime.now().plusHours(24);
+    }
 }

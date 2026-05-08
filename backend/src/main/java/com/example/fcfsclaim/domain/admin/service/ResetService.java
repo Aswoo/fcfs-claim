@@ -37,9 +37,9 @@ public class ResetService {
         deleteRedisPattern("token:*");
         deleteRedisPattern("user:token:*");
 
-        // 모든 이벤트를 즉시 ACTIVE로 복구
+        // 모든 이벤트를 ACTIVE 복구 + end_at 24시간 연장
         eventRepository.findAll().forEach(event -> {
-            event.activate();
+            event.resetForTest();
             activeEventCache.add(event.getId());
         });
     }

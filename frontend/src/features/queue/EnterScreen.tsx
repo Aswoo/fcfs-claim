@@ -23,8 +23,9 @@ export const EnterScreen = ({ navigation }: Props) => {
     try {
       const { rank } = await queueService.enter(USER_ID, EVENT_ID);
       navigation.navigate('Waiting', { rank, eventId: EVENT_ID, userId: USER_ID });
-    } catch (e) {
-      Alert.alert('오류', '서버 연결에 실패했습니다.');
+    } catch (e: any) {
+      const msg = e?.response?.data?.error?.message ?? '서버 연결에 실패했습니다.';
+      Alert.alert('오류', msg);
     } finally {
       setLoading(false);
     }
@@ -61,8 +62,9 @@ export const EnterScreen = ({ navigation }: Props) => {
       await queueService.simulatePrecedingUsers(20, EVENT_ID);
       const { rank } = await queueService.enter(USER_ID, EVENT_ID);
       navigation.navigate('Waiting', { rank, eventId: EVENT_ID, userId: USER_ID });
-    } catch (e) {
-      Alert.alert('오류', '서버 연결에 실패했습니다.');
+    } catch (e: any) {
+      const msg = e?.response?.data?.error?.message ?? '서버 연결에 실패했습니다.';
+      Alert.alert('오류', msg);
     } finally {
       setLoadingWith20(false);
     }

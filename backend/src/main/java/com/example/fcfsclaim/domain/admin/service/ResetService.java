@@ -36,6 +36,12 @@ public class ResetService {
         deleteRedisPattern("queue:waiting:*");
         deleteRedisPattern("token:*");
         deleteRedisPattern("user:token:*");
+
+        // 모든 이벤트를 즉시 ACTIVE로 복구
+        eventRepository.findAll().forEach(event -> {
+            event.activate();
+            activeEventCache.add(event.getId());
+        });
     }
 
     // ── 테스트 전용 admin 메서드 ────────────────────────────────────────────

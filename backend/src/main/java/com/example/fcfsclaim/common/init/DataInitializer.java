@@ -23,9 +23,9 @@ public class DataInitializer implements CommandLineRunner {
     public void run(String... args) {
         if (eventRepository.count() > 0) return;
 
-        // 1분 뒤 시작, 30분간 진행 (로컬 테스트용)
+        // 1분 뒤 시작, 24시간 진행 (테스트 중 만료 방지)
         LocalDateTime start = LocalDateTime.now().plusMinutes(1);
-        LocalDateTime end   = start.plusMinutes(30);
+        LocalDateTime end   = start.plusHours(24);
         Event event = eventRepository.save(Event.of("스타벅스 MD 한정 증정", start, end));
 
         // TaskScheduler에 활성화·종료 예약

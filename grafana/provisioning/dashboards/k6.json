@@ -1,0 +1,229 @@
+{
+  "title": "k6 부하 테스트",
+  "uid": "fcfs-k6",
+  "schemaVersion": 38,
+  "refresh": "5s",
+  "time": { "from": "now-15m", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "title": "RPS (초당 요청 수)",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
+      "datasource": { "uid": "influxdb-k6" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "lineWidth": 2, "fillOpacity": 10 },
+          "unit": "reqps"
+        }
+      },
+      "options": { "tooltip": { "mode": "multi" } },
+      "targets": [
+        {
+          "refId": "A",
+          "rawQuery": true,
+          "query": "SELECT non_negative_derivative(max(\"value\"), 1s) AS \"rps\" FROM \"http_reqs\" WHERE $timeFilter GROUP BY time($__interval) fill(0)"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "에러율 (%)",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
+      "datasource": { "uid": "influxdb-k6" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "fixedColor": "red", "mode": "fixed" },
+          "custom": { "lineWidth": 2, "fillOpacity": 10 },
+          "unit": "percent",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 1 }
+            ]
+          }
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "rawQuery": true,
+          "query": "SELECT mean(\"value\") * 100 AS \"error_rate\" FROM \"http_req_failed\" WHERE $timeFilter GROUP BY time($__interval) fill(0)"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "응답 시간 (p50 / p95 / p99)",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 8, "w": 24, "h": 8 },
+      "datasource": { "uid": "influxdb-k6" },
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "lineWidth": 2 },
+          "unit": "ms"
+        }
+      },
+      "options": { "tooltip": { "mode": "multi" } },
+      "targets": [
+        {
+          "refId": "A",
+          "rawQuery": true,
+          "query": "SELECT percentile(\"value\", 50) AS \"p50\" FROM \"http_req_duration\" WHERE $timeFilter GROUP BY time($__interval) fill(null)"
+        },
+        {
+          "refId": "B",
+          "rawQuery": true,
+          "query": "SELECT percentile(\"value\", 95) AS \"p95\" FROM \"http_req_duration\" WHERE $timeFilter GROUP BY time($__interval) fill(null)"
+        },
+        {
+          "refId": "C",
+          "rawQuery": true,
+          "query": "SELECT percentile(\"value\", 99) AS \"p99\" FROM \"http_req_duration\" WHERE $timeFilter GROUP BY time($__interval) fill(null)"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Virtual Users (동시 접속자)",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 16, "w": 12, "h": 8 },
+      "datasource": { "uid": "influxdb-k6" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "fixedColor": "blue", "mode": "fixed" },
+          "custom": { "lineWidth": 2, "fillOpacity": 20 },
+          "unit": "short"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "rawQuery": true,
+          "query": "SELECT max(\"value\") AS \"vus\" FROM \"vus\" WHERE $timeFilter GROUP BY time($__interval) fill(0)"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "응답 시간 분포",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 16, "w": 12, "h": 8 },
+      "datasource": { "uid": "influxdb-k6" },
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "lineWidth": 1, "fillOpacity": 5 },
+          "unit": "ms"
+        }
+      },
+      "options": { "tooltip": { "mode": "multi" } },
+      "targets": [
+        {
+          "refId": "A",
+          "rawQuery": true,
+          "query": "SELECT mean(\"value\") AS \"대기(waiting)\" FROM \"http_req_waiting\" WHERE $timeFilter GROUP BY time($__interval) fill(null)"
+        },
+        {
+          "refId": "B",
+          "rawQuery": true,
+          "query": "SELECT mean(\"value\") AS \"수신(receiving)\" FROM \"http_req_receiving\" WHERE $timeFilter GROUP BY time($__interval) fill(null)"
+        },
+        {
+          "refId": "C",
+          "rawQuery": true,
+          "query": "SELECT mean(\"value\") AS \"전송(sending)\" FROM \"http_req_sending\" WHERE $timeFilter GROUP BY time($__interval) fill(null)"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "전체 요청 수",
+      "type": "stat",
+      "gridPos": { "x": 0, "y": 24, "w": 4, "h": 4 },
+      "datasource": { "uid": "influxdb-k6" },
+      "fieldConfig": { "defaults": { "unit": "short" } },
+      "options": { "reduceOptions": { "calcs": ["sum"] }, "colorMode": "background" },
+      "targets": [
+        {
+          "refId": "A",
+          "rawQuery": true,
+          "query": "SELECT non_negative_derivative(max(\"value\"), 1s) FROM \"http_reqs\" WHERE $timeFilter GROUP BY time(1s)"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "title": "p95 응답 시간",
+      "type": "stat",
+      "gridPos": { "x": 4, "y": 24, "w": 4, "h": 4 },
+      "datasource": { "uid": "influxdb-k6" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 200 },
+              { "color": "red", "value": 500 }
+            ]
+          }
+        }
+      },
+      "options": { "reduceOptions": { "calcs": ["max"] }, "colorMode": "background" },
+      "targets": [
+        {
+          "refId": "A",
+          "rawQuery": true,
+          "query": "SELECT percentile(\"value\", 95) FROM \"http_req_duration\" WHERE $timeFilter GROUP BY time($__interval)"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "title": "최대 에러율",
+      "type": "stat",
+      "gridPos": { "x": 8, "y": 24, "w": 4, "h": 4 },
+      "datasource": { "uid": "influxdb-k6" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 0.01 }
+            ]
+          }
+        }
+      },
+      "options": { "reduceOptions": { "calcs": ["max"] }, "colorMode": "background" },
+      "targets": [
+        {
+          "refId": "A",
+          "rawQuery": true,
+          "query": "SELECT mean(\"value\") FROM \"http_req_failed\" WHERE $timeFilter GROUP BY time($__interval)"
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "title": "최대 동시 접속자",
+      "type": "stat",
+      "gridPos": { "x": 12, "y": 24, "w": 4, "h": 4 },
+      "datasource": { "uid": "influxdb-k6" },
+      "fieldConfig": { "defaults": { "unit": "short" } },
+      "options": { "reduceOptions": { "calcs": ["max"] }, "colorMode": "value" },
+      "targets": [
+        {
+          "refId": "A",
+          "rawQuery": true,
+          "query": "SELECT max(\"value\") FROM \"vus\" WHERE $timeFilter GROUP BY time($__interval)"
+        }
+      ]
+    }
+  ]
+}

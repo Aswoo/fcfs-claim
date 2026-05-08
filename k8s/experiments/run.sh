@@ -41,15 +41,31 @@ apply_and_wait() {
   jvm_info
 }
 
+influxdb_out() {
+  if curl -sf --max-time 1 http://localhost:8086/ping >/dev/null 2>&1; then
+    echo "--out influxdb=http://localhost:8086/k6"
+  else
+    echo ""
+  fi
+}
+
 run_k6() {
   local script="$1"
   local duration="${2:-}"
+  local out_flag
+  out_flag=$(influxdb_out)
+
+  if [ -n "$out_flag" ]; then
+    echo "📊 Grafana 연동 활성 → http://localhost:3000"
+  fi
   echo "🚀 k6 시작: $script"
   echo ""
   if [ -n "$duration" ]; then
-    k6 run --duration "$duration" "$ROOT_DIR/k6/$script"
+    # shellcheck disable=SC2086
+    k6 run --duration "$duration" $out_flag "$ROOT_DIR/k6/$script"
   else
-    k6 run "$ROOT_DIR/k6/$script"
+    # shellcheck disable=SC2086
+    k6 run $out_flag "$ROOT_DIR/k6/$script"
   fi
 }
 
@@ -386,6 +402,14 @@ JVM 실험 실행 스크립트
   gc-stress    힙 64MB 강제 축소 + k6 30초 부하 → Full GC 유발
   gc-tail      GC 로그 실시간 스트리밍 (터미널 B 전용)
   gc-stats     GC 통계 분석 (Young/Full GC 횟수, 평균 시간)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ Grafana 모니터링 (선택)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  docker compose up -d influxdb grafana
+  → http://localhost:3000  (admin / admin)
+  → k6 결과 자동으로 InfluxDB → Grafana 대시보드에 표시됨
+  InfluxDB가 실행 중이면 k6 --out influxdb 자동 활성화
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
  공통 유틸

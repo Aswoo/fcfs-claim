@@ -1,6 +1,8 @@
 NAMESPACE := fcfs
 IMAGE     := fcfs-claim-app:latest
 
+.PHONY: dev deploy redeploy port status logs experiment
+
 # ── 개발 ────────────────────────────────────────────
 dev:
 	./dev.sh

@@ -306,7 +306,7 @@ k6 run k6/05_expired_token.js
 k6 run k6/01_queue_stress.js
 ```
 
-> 자세한 내용 → [`docs/k6-load-test.md`](docs/k6-load-test.md)
+> 자세한 내용 → [`docs/testing/k6-load-test.md`](docs/testing/k6-load-test.md)
 
 ---
 
@@ -336,7 +336,7 @@ Controller 슬라이스 테스트   → HTTP 레이어. MockMvc
 
 통합 테스트(`@SpringBootTest`)는 Redis 실서버가 필요하고 무거워서 제외했다.
 
-> 자세한 내용 → [`docs/testing.md`](docs/testing.md)
+> 자세한 내용 → [`docs/testing/testing.md`](docs/testing/testing.md)
 
 ---
 
@@ -382,7 +382,7 @@ kubectl top pod -n fcfs
 # limit 대비 80% 넘으면 위험
 ```
 
-> 자세한 내용 → [`docs/jvm-oom-experiment.md`](docs/jvm-oom-experiment.md)
+> 자세한 내용 → [`docs/backend/jvm-oom-experiment.md`](docs/backend/jvm-oom-experiment.md)
 
 ---
 
@@ -447,15 +447,22 @@ fcfs-claim/
 │   ├── test-plan.md
 │   └── jvm-experiments.md
 └── docs/                        # 설계 문서 및 학습 자료
-    ├── architecture.md          # 컴포넌트 구조, 핵심 설계 결정
-    ├── domain-model.md          # 엔티티 상세, 도메인 간 흐름
-    ├── db-schema.md             # 테이블 정의, Redis 키 구조
-    ├── testing.md               # 테스트 전략, 계층별 설명
-    ├── jvm-oom-experiment.md    # OOMKilled 실제 로그 기반 분석 가이드
-    ├── k6-load-test.md          # 부하 테스트 스크립트 설명
-    ├── docker-guide.md          # Docker 입문 가이드
-    ├── kubernetes-guide.md      # K8s 입문 + 실제 문제 해결
-    ├── pubsub-and-expiry.md     # Redis Pub/Sub & 토큰 만료 배치
-    ├── redis-migration.md       # 인메모리 → Redis 전환 과정
+    ├── architecture/
+    │   ├── architecture.md      # 컴포넌트 구조, 핵심 설계 결정
+    │   ├── domain-model.md      # 엔티티 상세, 도메인 간 흐름
+    │   └── db-schema.md         # 테이블 정의, Redis 키 구조
+    ├── backend/
+    │   ├── jvm-oom-experiment.md  # OOMKilled 실제 로그 기반 분석 가이드
+    │   ├── pubsub-and-expiry.md   # Redis Pub/Sub & 토큰 만료 배치
+    │   └── redis-migration.md     # 인메모리 → Redis 전환 과정
+    ├── infra/
+    │   ├── docker-guide.md        # Docker 입문 가이드
+    │   ├── kubernetes-guide.md    # K8s 입문 + 실제 문제 해결
+    │   └── troubleshooting-k8s-docker.md  # K8s·Docker 버그 사례 모음
+    └── testing/
+        ├── testing.md             # 테스트 전략, 계층별 설명
+        ├── k6-load-test.md        # 부하 테스트 스크립트 설명
+        ├── jvm-experiment-report.md  # JVM 실험 결과 리포트 (OOM·CPU·GC)
+        └── interview-qa.md        # 면접 예상 Q&A
     └── interview-qa.md          # 면접 Q&A
 ```

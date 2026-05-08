@@ -7,6 +7,8 @@ NAMESPACE="fcfs"
 APP_LABEL="app=fcfs-app"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
+IMAGE_TAG_FILE="$ROOT_DIR/.image-tag"
+IMAGE_BASE="fcfs-claim-app"
 
 # ──────────────────────────────────────────
 # 내부 헬퍼
@@ -33,9 +35,17 @@ jvm_info() {
   echo ""
 }
 
+current_tag() {
+  cat "$IMAGE_TAG_FILE" 2>/dev/null || echo "latest"
+}
+
 apply_and_wait() {
-  echo "📦 적용: $1"
+  local tag
+  tag=$(current_tag)
+  echo "📦 적용: $1  (이미지 태그: $tag)"
   kubectl apply -f "$SCRIPT_DIR/$1"
+  kubectl set image deployment/fcfs-app \
+    fcfs-app="$IMAGE_BASE:$tag" -n "$NAMESPACE" >/dev/null
   sleep 3
   wait_ready
   jvm_info
@@ -57,6 +67,7 @@ run_k6() {
 
   if [ -n "$out_flag" ]; then
     echo "📊 Grafana 연동 활성 → http://localhost:3000"
+    open "http://localhost:3000" 2>/dev/null || true
   fi
   echo "🚀 k6 시작: $script"
   echo ""
@@ -116,11 +127,14 @@ show_result_oom() {
 # ──────────────────────────────────────────
 
 cmd_build() {
-  echo "=== 이미지 빌드 ==="
-  docker build -t fcfs-claim-app:latest "$ROOT_DIR/backend"
+  local tag
+  tag="dev-$(date +%Y%m%d%H%M%S)"
+  echo "=== 이미지 빌드 (태그: $tag) ==="
+  docker build -t "$IMAGE_BASE:$tag" "$ROOT_DIR/backend"
+  echo "$tag" > "$IMAGE_TAG_FILE"
   echo ""
-  echo "✅ 빌드 완료. 새 이미지로 파드 교체:"
-  echo "   kubectl rollout restart deployment/fcfs-app -n $NAMESPACE"
+  echo "✅ 빌드 완료. 태그: $tag"
+  echo "   실험 실행 시 자동으로 이 태그가 적용됩니다."
 }
 
 cmd_status() {

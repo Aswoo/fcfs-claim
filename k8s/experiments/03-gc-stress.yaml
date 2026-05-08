@@ -16,7 +16,7 @@ spec:
       containers:
         - name: fcfs-app
           image: docker.io/library/fcfs-claim-app:latest
-          imagePullPolicy: Never
+          imagePullPolicy: IfNotPresent
           env:
             - name: SPRING_PROFILES_ACTIVE
               value: docker
@@ -26,11 +26,11 @@ spec:
               value: password
             - name: JAVA_OPTS
               # GC 압박 실험 — 힙을 의도적으로 작게 설정
-              # Xms32m Xmx64m: heap이 64MB 한도에 빨리 도달해 GC가 매우 자주 발생
+              # Xms64m Xmx160m: 기동은 가능하되 부하 시 GC가 자주 발생
               # Full GC(Stop-the-World)가 터지면 k6 p(95) 응답 시간이 급등하는 것을 볼 수 있다
               value: >-
-                -Xms32m
-                -Xmx64m
+                -Xms64m
+                -Xmx160m
                 -Xlog:gc*:file=/tmp/gc.log:time,uptime,level,tags
           ports:
             - containerPort: 8081

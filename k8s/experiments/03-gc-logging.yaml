@@ -16,7 +16,7 @@ spec:
       containers:
         - name: fcfs-app
           image: docker.io/library/fcfs-claim-app:latest
-          imagePullPolicy: Never
+          imagePullPolicy: IfNotPresent
           env:
             - name: SPRING_PROFILES_ACTIVE
               value: docker

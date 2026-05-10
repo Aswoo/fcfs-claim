@@ -36,12 +36,16 @@ public class Product {
     private LocalDateTime createdAt;
 
     public static Product of(Long eventId, String name, String description, int stock) {
+        return of(eventId, name, description, stock, stock);
+    }
+
+    public static Product of(Long eventId, String name, String description, int totalStock, int initialStock) {
         Product p = new Product();
         p.eventId = eventId;
         p.name = name;
         p.description = description;
-        p.stock = stock;
-        p.totalStock = stock;
+        p.stock = initialStock;
+        p.totalStock = totalStock;
         p.createdAt = LocalDateTime.now();
         return p;
     }

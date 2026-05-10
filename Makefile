@@ -1,5 +1,7 @@
-NAMESPACE := fcfs
-IMAGE     := fcfs-claim-app:latest
+NAMESPACE  := fcfs
+IMAGE_BASE := fcfs-claim-app
+IMAGE_TAG  := $(shell date +%Y%m%d%H%M%S)
+IMAGE      := $(IMAGE_BASE):$(IMAGE_TAG)
 
 .PHONY: dev deploy redeploy port status logs experiment
 
@@ -12,8 +14,9 @@ deploy:
 	./k8s/deploy.sh
 
 redeploy:
-	docker build -t $(IMAGE) ./backend
-	kubectl rollout restart deployment/fcfs-app -n $(NAMESPACE)
+	docker build -t $(IMAGE) -t $(IMAGE_BASE):latest ./backend
+	echo "$(IMAGE_TAG)" > .image-tag
+	kubectl set image deployment/fcfs-app fcfs-app=$(IMAGE) -n $(NAMESPACE)
 	kubectl rollout status deployment/fcfs-app -n $(NAMESPACE) --timeout=90s
 
 # ── 포트포워드 ────────────────────────────────────────

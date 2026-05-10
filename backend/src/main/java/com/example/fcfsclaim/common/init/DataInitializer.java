@@ -33,7 +33,7 @@ public class DataInitializer implements CommandLineRunner {
         recoveryService.scheduleEnd(event);
 
         productRepository.save(Product.of(event.getId(), "써머 텀블러", "한정 수량 5개", 5));
-        productRepository.save(Product.of(event.getId(), "에코백", "한정 수량 8개", 8));
+        productRepository.save(Product.of(event.getId(), "에코백", "품절 체험용 — 선택 즉시 재고 소진 안내", 8, 0));
         productRepository.save(Product.of(event.getId(), "머그컵", "한정 수량 3개", 3));
         productRepository.save(Product.of(event.getId(), "키링", "한정 수량 4개", 4));
     }

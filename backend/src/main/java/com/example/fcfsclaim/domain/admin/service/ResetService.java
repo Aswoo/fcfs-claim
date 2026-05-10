@@ -37,11 +37,9 @@ public class ResetService {
         deleteRedisPattern("token:*");
         deleteRedisPattern("user:token:*");
 
-        // 모든 이벤트를 ACTIVE 복구 + end_at 24시간 연장
-        eventRepository.findAll().forEach(event -> {
-            event.resetForTest();
-            activeEventCache.add(event.getId());
-        });
+        // native query로 JPA 캐시 우회
+        eventRepository.reactivateAll(java.time.LocalDateTime.now().plusHours(24));
+        eventRepository.findAll().forEach(event -> activeEventCache.add(event.getId()));
     }
 
     // ── 테스트 전용 admin 메서드 ────────────────────────────────────────────

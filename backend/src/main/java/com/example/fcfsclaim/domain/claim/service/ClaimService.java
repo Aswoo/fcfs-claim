@@ -24,6 +24,10 @@ public class ClaimService {
     private final QueueTokenRepository queueTokenRepository;
     private final ProductRepository productRepository;
 
+    private String userTokenKey(Long eventId, Long userId) {
+        return "user:token:" + eventId + ":" + userId;
+    }
+
     @Transactional
     public ClaimResponse claim(ClaimRequest request) {
         String tokenRedisKey = "token:" + request.eventId() + ":" + request.token();
@@ -52,6 +56,7 @@ public class ClaimService {
 
         // 4. 토큰 소진
         redis.delete(tokenRedisKey);
+        redis.delete(userTokenKey(request.eventId(), request.userId()));
         queueTokenRepository.findByToken(request.token())
                 .ifPresent(QueueToken::markUsed);
 

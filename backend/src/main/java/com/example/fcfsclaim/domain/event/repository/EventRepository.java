@@ -3,6 +3,7 @@ package com.example.fcfsclaim.domain.event.repository;
 import com.example.fcfsclaim.domain.event.entity.Event;
 import com.example.fcfsclaim.domain.event.entity.EventStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -22,4 +23,8 @@ public interface EventRepository extends JpaRepository<Event, Long> {
     @Query("SELECT e FROM Event e WHERE e.status IN ('SCHEDULED', 'ACTIVE') " +
            "AND e.endAt <= :now")
     List<Event> findOverdue(@Param("now") LocalDateTime now);
+
+    @Modifying
+    @Query(value = "UPDATE event SET status = 'ACTIVE', end_at = :endAt", nativeQuery = true)
+    void reactivateAll(@Param("endAt") LocalDateTime endAt);
 }

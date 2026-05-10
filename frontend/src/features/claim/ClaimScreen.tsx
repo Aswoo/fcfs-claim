@@ -42,15 +42,21 @@ export const ClaimScreen = ({ navigation, route }: Props) => {
       navigation.replace('Success', { productName: selectedProduct.name });
     } catch (err: any) {
       const status = err?.response?.status;
-      const msg = err?.response?.data?.error;
+      const msg: string | undefined = err?.response?.data?.error;
       if (status === 409) {
-        Alert.alert('알림', msg ?? '재고가 소진되었거나 이미 수령하셨습니다.', [
-          { text: '확인', onPress: () => {
-            // 재고 갱신
-            claimService.getProducts(eventId).then(setProducts);
-            setSelectedProduct(null);
-          }},
-        ]);
+        const isSoldOut = msg?.includes('재고') ?? true;
+        if (isSoldOut) {
+          Alert.alert(
+            '품절됐습니다',
+            '해당 상품의 재고가 소진되었습니다.\n다른 상품을 선택해주세요.',
+            [{ text: '확인', onPress: () => {
+              claimService.getProducts(eventId).then(setProducts);
+              setSelectedProduct(null);
+            }}],
+          );
+        } else {
+          Alert.alert('이미 수령하셨습니다', '이미 수령 완료된 이벤트입니다.');
+        }
       } else if (status === 401) {
         Alert.alert('토큰 만료', '입장 시간이 만료되었습니다.', [
           { text: '확인', onPress: () => navigation.navigate('Enter') },

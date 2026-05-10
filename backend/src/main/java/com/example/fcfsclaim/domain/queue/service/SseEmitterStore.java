@@ -18,7 +18,13 @@ public class SseEmitterStore {
     }
 
     public void put(Long eventId, Long userId, SseEmitter emitter) {
-        emitters.put(key(eventId, userId), emitter);
+        SseEmitter old = emitters.put(key(eventId, userId), emitter);
+        if (old != null) {
+            try {
+                old.complete();
+            } catch (Exception ignored) {
+            }
+        }
     }
 
     public SseEmitter get(Long eventId, Long userId) {

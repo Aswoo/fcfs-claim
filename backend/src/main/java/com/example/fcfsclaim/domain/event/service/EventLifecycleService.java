@@ -1,6 +1,7 @@
 package com.example.fcfsclaim.domain.event.service;
 
 import com.example.fcfsclaim.domain.event.entity.Event;
+import com.example.fcfsclaim.domain.event.entity.EventStatus;
 import com.example.fcfsclaim.domain.event.repository.EventRepository;
 import com.example.fcfsclaim.domain.queue.service.SseEmitterStore;
 import lombok.RequiredArgsConstructor;
@@ -59,7 +60,7 @@ public class EventLifecycleService {
     @Transactional
     protected void doActivate(Long eventId) {
         Event event = eventRepository.findById(eventId).orElse(null);
-        if (event == null || !event.getStatus().name().equals("SCHEDULED")) return;
+        if (event == null || event.getStatus() != EventStatus.SCHEDULED) return;
 
         event.activate();
         activeEventCache.add(eventId);  // 30초 기다리지 않고 즉시 캐시 반영

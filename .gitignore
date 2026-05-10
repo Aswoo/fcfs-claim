@@ -30,3 +30,7 @@ Thumbs.db
 *.key
 .env
 .env.*
+
+# ===== Private =====
+docs/interview-prep.md
+portpolio/

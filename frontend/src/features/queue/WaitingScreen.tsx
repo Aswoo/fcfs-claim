@@ -49,16 +49,20 @@ export const WaitingScreen = ({ navigation, route }: Props) => {
     return () => es.close();
   }, [userId, eventId]);
 
-  // 10초마다 순위 갱신 (화면 표시용)
+  // 3초마다 순위 갱신 — SSE가 실패했을 때 fallback으로 Ready 이동도 처리
   useEffect(() => {
     const poll = async () => {
       try {
         const status = await queueService.getStatus(userId, eventId);
-        if (status.rank > 0) setRank(status.rank);
+        if (status.isReady && status.token) {
+          navigation.replace('Ready', { token: status.token, sequenceNumber: rank, eventId, userId });
+        } else if (status.rank > 0) {
+          setRank(status.rank);
+        }
       } catch (e) {}
     };
 
-    const interval = setInterval(poll, 10000);
+    const interval = setInterval(poll, 3000);
     return () => clearInterval(interval);
   }, [userId, eventId]);
 

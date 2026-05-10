@@ -16,9 +16,12 @@ import org.springframework.data.redis.core.ZSetOperations;
 import org.springframework.http.HttpStatus;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
@@ -85,11 +88,15 @@ public class QueueService {
         }
     }
 
-    private void processQueueForEvent(Long eventId) {
+    @Transactional
+    void processQueueForEvent(Long eventId) {
         Set<ZSetOperations.TypedTuple<String>> users =
                 redis.opsForZSet().popMin(waitingKey(eventId), PROCESS_PER_SECOND);
 
         if (users == null || users.isEmpty()) return;
+
+        List<QueueToken> tokens = new ArrayList<>();
+        List<QueueReadyMessage> messages = new ArrayList<>();
 
         for (ZSetOperations.TypedTuple<String> entry : users) {
             Long userId = Long.valueOf(entry.getValue());
@@ -97,9 +104,12 @@ public class QueueService {
 
             redis.opsForValue().set(userTokenKey(eventId, userId), token, TOKEN_TTL);
             redis.opsForValue().set(tokenKey(eventId, token), userId.toString(), TOKEN_TTL);
-            queueTokenRepository.save(QueueToken.of(eventId, userId, token));
-            publish(new QueueReadyMessage(eventId, userId, token));
+            tokens.add(QueueToken.of(eventId, userId, token));
+            messages.add(new QueueReadyMessage(eventId, userId, token));
         }
+
+        queueTokenRepository.saveAll(tokens);
+        messages.forEach(this::publish);
     }
 
     private void publish(QueueReadyMessage msg) {

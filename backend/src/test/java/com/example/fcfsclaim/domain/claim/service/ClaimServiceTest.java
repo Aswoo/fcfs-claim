@@ -41,7 +41,8 @@ class ClaimServiceTest {
     private static final Long EVENT_ID  = 10L;
     private static final Long PRODUCT_ID = 100L;
     private static final String TOKEN   = "test-token-uuid";
-    private static final String TOKEN_KEY = "token:" + EVENT_ID + ":" + TOKEN;
+    private static final String TOKEN_KEY      = "token:" + EVENT_ID + ":" + TOKEN;
+    private static final String USER_TOKEN_KEY = "user:token:" + EVENT_ID + ":" + USER_ID;
 
     @BeforeEach
     void setUp() {
@@ -63,6 +64,10 @@ class ClaimServiceTest {
         verify(claimRepository).save(any(Claim.class));
         verify(productRepository).decrementStock(PRODUCT_ID);
         verify(redis).delete(TOKEN_KEY);
+        // BUG-02: claim 완료 후 user:token 키도 삭제해야 한다
+        // 삭제 안 하면 claim 이후에도 getStatus()가 "ready"를 반환함
+        // 이 verify가 실패하면 버그 재현 성공
+        verify(redis).delete(USER_TOKEN_KEY);
     }
 
     @Test

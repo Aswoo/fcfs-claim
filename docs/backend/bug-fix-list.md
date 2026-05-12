@@ -6,21 +6,23 @@
 
 ## 목차
 
-1. [BUG-01 — ActiveEventCache 경쟁 조건](#bug-01--activeeventcache-경쟁-조건)
-2. [BUG-02 — claim 후 user:token 키 미삭제](#bug-02--claim-후-usertoken-키-미삭제)
-3. [BUG-03 — processQueueForEvent 트랜잭션 누락](#bug-03--processqueueforevent-트랜잭션-누락)
-4. [BUG-04 — SseEmitter 재연결 시 이전 연결 미정리](#bug-04--sseemitter-재연결-시-이전-연결-미정리)
-5. [BUG-05 — SseEmitterStore.getByEventId() O(n) 전체 스캔](#bug-05--sseemitterstoregetbyeventid-on-전체-스캔)
-6. [BUG-06 — EventLifecycleService enum 문자열 비교](#bug-06--eventlifecycleservice-enum-문자열-비교)
-7. [BUG-07 — processQueueForEvent 개별 save 반복](#bug-07--processqueueforevent-개별-save-반복)
+1. [BUG-01 — ActiveEventCache 경쟁 조건](#bug-01--activeeventcache-경쟁-조건) ✅
+2. [BUG-02 — claim 후 user:token 키 미삭제](#bug-02--claim-후-usertoken-키-미삭제) ✅
+3. [BUG-03 — processQueueForEvent 트랜잭션 누락](#bug-03--processqueueforevent-트랜잭션-누락) ✅
+4. [BUG-04 — SseEmitter 재연결 시 이전 연결 미정리](#bug-04--sseemitter-재연결-시-이전-연결-미정리) ✅
+5. [BUG-05 — SseEmitterStore.getByEventId() O(n) 전체 스캔](#bug-05--sseemitterstoregetbyeventid-on-전체-스캔) ❌
+6. [BUG-06 — EventLifecycleService enum 문자열 비교](#bug-06--eventlifecycleservice-enum-문자열-비교) ✅
+7. [BUG-07 — processQueueForEvent 개별 save 반복](#bug-07--processqueueforevent-개별-save-반복) ✅
+8. [BUG-08 — ActiveEventCache 트랜잭션 커밋 전 업데이트 레이스](#bug-08--activeeventcache-트랜잭션-커밋-전-업데이트-레이스) ✅
 
 ---
 
-## BUG-01 — ActiveEventCache 경쟁 조건
+## BUG-01 — ActiveEventCache 경쟁 조건 ✅ 해결됨
 
 **파일**: `domain/event/service/ActiveEventCache.java`
 **심각도**: 중 (재현 어렵지만 실제 버그)
 **종류**: Thread Safety
+**상태**: `volatile` → `AtomicReference.updateAndGet()` (CAS) 으로 교체 완료
 
 ### 문제
 
@@ -100,11 +102,12 @@ public Set<Long> getAll() {
 
 ---
 
-## BUG-02 — claim 후 user:token 키 미삭제
+## BUG-02 — claim 후 user:token 키 미삭제 ✅ 해결됨
 
 **파일**: `domain/claim/service/ClaimService.java`
 **심각도**: 낮 (UX 혼란, 보안 위험 없음)
 **종류**: 상태 불일치
+**상태**: `redis.delete(userTokenKey(...))` 추가 완료
 
 ### 문제
 
@@ -151,11 +154,12 @@ private String userTokenKey(Long eventId, Long userId) {
 
 ---
 
-## BUG-03 — processQueueForEvent 트랜잭션 누락
+## BUG-03 — processQueueForEvent 트랜잭션 누락 ✅ 해결됨
 
 **파일**: `domain/queue/service/QueueService.java`
 **심각도**: 중 (부분 실패 시 데이터 불일치)
 **종류**: 트랜잭션 무결성
+**상태**: `@Transactional` + `saveAll()` 일괄 처리로 수정 완료
 
 ### 문제
 
@@ -228,11 +232,12 @@ private void processQueueForEvent(Long eventId) {
 
 ---
 
-## BUG-04 — SseEmitter 재연결 시 이전 연결 미정리
+## BUG-04 — SseEmitter 재연결 시 이전 연결 미정리 ✅ 해결됨
 
 **파일**: `domain/queue/service/SseEmitterStore.java`
 **심각도**: 낮 (메모리 누수 가능성)
 **종류**: 리소스 관리
+**상태**: `put()` 시 이전 emitter `old.complete()` 호출로 수정 완료
 
 ### 문제
 
@@ -265,11 +270,12 @@ public void put(Long eventId, Long userId, SseEmitter emitter) {
 
 ---
 
-## BUG-05 — SseEmitterStore.getByEventId() O(n) 전체 스캔
+## BUG-05 — SseEmitterStore.getByEventId() O(n) 전체 스캔 ❌ 미해결
 
 **파일**: `domain/queue/service/SseEmitterStore.java`
 **심각도**: 낮 (현재 규모에서 체감 없음, 이벤트/유저 수 증가 시 문제)
 **종류**: 성능
+**상태**: 현재 단일 `ConcurrentHashMap<String, SseEmitter>` + prefix 스캔 구조 유지 중. 동시 접속 규모가 커지면 이중 Map으로 전환 필요
 
 ### 문제
 
@@ -321,11 +327,12 @@ public Map<Long, SseEmitter> getByEventId(Long eventId) {
 
 ---
 
-## BUG-06 — EventLifecycleService enum 문자열 비교
+## BUG-06 — EventLifecycleService enum 문자열 비교 ✅ 해결됨
 
 **파일**: `domain/event/service/EventLifecycleService.java`
 **심각도**: 낮 (현재는 문제없으나 리팩터링 시 잡기 어려운 버그 유발)
 **종류**: 코드 품질
+**상태**: `event.getStatus() != EventStatus.SCHEDULED` 직접 비교로 수정 완료
 
 ### 문제
 
@@ -351,12 +358,12 @@ if (event == null || event.getStatus() != EventStatus.SCHEDULED) return;
 
 ---
 
-## BUG-07 — processQueueForEvent 개별 save 반복
+## BUG-07 — processQueueForEvent 개별 save 반복 ✅ 해결됨
 
 **파일**: `domain/queue/service/QueueService.java`
 **심각도**: 낮 (현재 규모에서 체감 없음)
 **종류**: 성능
-**참고**: BUG-03 수정 시 함께 해결됨
+**상태**: BUG-03 수정 시 `saveAll()` 일괄 처리로 함께 해결됨
 
 ### 문제
 
@@ -393,14 +400,59 @@ redis.executePipelined((RedisCallback<Object>) connection -> {
 
 ---
 
+## BUG-08 — ActiveEventCache 트랜잭션 커밋 전 업데이트 레이스 ✅ 해결됨
+
+**파일**: `domain/event/service/EventLifecycleService.java`
+**심각도**: 중 (이벤트 활성화 후 최대 30초간 대기열 미처리)
+**종류**: 트랜잭션 타이밍
+
+### 문제
+
+`doActivate()` / `doEnd()` 는 `@Transactional` 안에서 `activeEventCache.add()` / `remove()`를 직접 호출했다. DB 커밋 전에 캐시가 갱신되므로, 그 사이에 `refresh()`가 실행되면 DB에서 아직 커밋되지 않은 상태를 읽어 캐시를 덮어쓴다.
+
+```
+T1: doActivate() — event.activate() (미커밋)
+T2: activeEventCache.add(1L) → cache = {1L}
+T3: refresh() — DB 조회 → ACTIVE 없음 (미커밋) → cache = {}  ← 덮어씀
+T4: 커밋 완료
+T5: processQueue → cache = {} → 대기열 처리 안 함 (최대 30초)
+```
+
+### 수정 방법
+
+`ApplicationEventPublisher`로 도메인 이벤트를 발행하고, `@TransactionalEventListener(AFTER_COMMIT)`으로 커밋 이후에만 캐시와 Redis를 갱신한다.
+
+```java
+// EventLifecycleService — 트랜잭션 안에서는 이벤트 발행만
+@Transactional
+protected void doActivate(Long eventId) {
+    event.activate();
+    eventPublisher.publishEvent(new EventActivatedEvent(eventId)); // 커밋 후 처리 예약
+}
+
+// EventLifecycleListener — 커밋 완료 후 실행
+@TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+public void onActivated(EventActivatedEvent event) {
+    activeEventCache.add(event.eventId()); // 이 시점엔 DB와 일치
+}
+```
+
+`doEnd()`의 Redis 대기열 삭제(`queue:waiting:`)와 Pub/Sub 발행(`queue:ended`)도 같은 이유로 리스너로 이동했다.
+
+**상태**: `EventActivatedEvent` / `EventEndedEvent` / `EventLifecycleListener` 추가로 수정 완료
+**참고**: [`docs/backend/activeeventcache-race.md`](activeeventcache-race.md)
+
+---
+
 ## 수정 우선순위 요약
 
-| # | 파일 | 심각도 | 수정 난이도 | 먼저 할 것 |
-|---|------|--------|------------|-----------|
-| BUG-01 | ActiveEventCache | 중 | 낮음 | ✅ 추천 |
-| BUG-02 | ClaimService | 낮 | 매우 낮음 | ✅ 추천 |
-| BUG-03 | QueueService | 중 | 낮음 | ✅ 추천 |
-| BUG-04 | SseEmitterStore | 낮 | 낮음 | 추천 |
-| BUG-05 | SseEmitterStore | 낮 | 중간 | 규모 커질 때 |
-| BUG-06 | EventLifecycleService | 낮 | 매우 낮음 | ✅ 추천 (1분) |
-| BUG-07 | QueueService | 낮 | 낮음 | BUG-03과 함께 |
+| # | 파일 | 심각도 | 상태 |
+|---|------|--------|------|
+| BUG-01 | ActiveEventCache | 중 | ✅ 해결 |
+| BUG-02 | ClaimService | 낮 | ✅ 해결 |
+| BUG-03 | QueueService | 중 | ✅ 해결 |
+| BUG-04 | SseEmitterStore | 낮 | ✅ 해결 |
+| BUG-05 | SseEmitterStore | 낮 | ❌ 미해결 (규모 커질 때) |
+| BUG-06 | EventLifecycleService | 낮 | ✅ 해결 |
+| BUG-07 | QueueService | 낮 | ✅ 해결 (BUG-03과 함께) |
+| BUG-08 | EventLifecycleService | 중 | ✅ 해결 |

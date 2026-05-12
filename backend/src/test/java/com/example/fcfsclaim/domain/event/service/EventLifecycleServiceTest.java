@@ -1,7 +1,6 @@
 package com.example.fcfsclaim.domain.event.service;
 
 import com.example.fcfsclaim.domain.event.entity.Event;
-import com.example.fcfsclaim.domain.event.entity.EventStatus;
 import com.example.fcfsclaim.domain.event.repository.EventRepository;
 import com.example.fcfsclaim.domain.queue.service.SseEmitterStore;
 import net.javacrumbs.shedlock.core.LockConfiguration;
@@ -12,7 +11,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.context.ApplicationEventPublisher;
 
 import java.time.LocalDateTime;
 import java.util.Optional;
@@ -24,8 +23,7 @@ import static org.mockito.Mockito.*;
 class EventLifecycleServiceTest {
 
     @Mock EventRepository eventRepository;
-    @Mock ActiveEventCache activeEventCache;
-    @Mock StringRedisTemplate redis;
+    @Mock ApplicationEventPublisher eventPublisher;
     @Mock SseEmitterStore emitterStore;
     @Mock LockProvider lockProvider;
     @Mock SimpleLock simpleLock;
@@ -49,12 +47,12 @@ class EventLifecycleServiceTest {
     @Test
     void activateEvent_성공() {
         when(lockProvider.lock(any(LockConfiguration.class))).thenReturn(Optional.of(simpleLock));
-        Event event = scheduledEvent();
-        when(eventRepository.findById(EVENT_ID)).thenReturn(Optional.of(event));
+        when(eventRepository.findById(EVENT_ID)).thenReturn(Optional.of(scheduledEvent()));
 
         lifecycleService.activateEvent(EVENT_ID);
 
-        verify(activeEventCache).add(EVENT_ID);
+        // 캐시 반영은 AFTER_COMMIT 이후 EventLifecycleListener가 담당
+        verify(eventPublisher).publishEvent(new EventActivatedEvent(EVENT_ID));
         verify(simpleLock).unlock();
     }
 
@@ -65,20 +63,18 @@ class EventLifecycleServiceTest {
         lifecycleService.activateEvent(EVENT_ID);
 
         verify(eventRepository, never()).findById(any());
-        verify(activeEventCache, never()).add(any());
+        verify(eventPublisher, never()).publishEvent(any());
     }
 
     @Test
     void endEvent_성공() {
         when(lockProvider.lock(any(LockConfiguration.class))).thenReturn(Optional.of(simpleLock));
-        Event event = activeEvent();
-        when(eventRepository.findById(EVENT_ID)).thenReturn(Optional.of(event));
+        when(eventRepository.findById(EVENT_ID)).thenReturn(Optional.of(activeEvent()));
 
         lifecycleService.endEvent(EVENT_ID);
 
-        verify(activeEventCache).remove(EVENT_ID);
-        verify(redis).delete("queue:waiting:" + EVENT_ID);
-        verify(redis).convertAndSend(eq("queue:ended"), eq(String.valueOf(EVENT_ID)));
+        // 캐시 제거·Redis 정리·Pub/Sub은 AFTER_COMMIT 이후 EventLifecycleListener가 담당
+        verify(eventPublisher).publishEvent(new EventEndedEvent(EVENT_ID));
         verify(simpleLock).unlock();
     }
 
@@ -86,12 +82,11 @@ class EventLifecycleServiceTest {
     void endEvent_이미종료된이벤트_스킵() {
         when(lockProvider.lock(any(LockConfiguration.class))).thenReturn(Optional.of(simpleLock));
         Event event = activeEvent();
-        event.end();   // 이미 ENDED 상태
+        event.end();
         when(eventRepository.findById(EVENT_ID)).thenReturn(Optional.of(event));
 
         lifecycleService.endEvent(EVENT_ID);
 
-        verify(activeEventCache, never()).remove(any());
-        verify(redis, never()).delete(anyString());
+        verify(eventPublisher, never()).publishEvent(any());
     }
 }

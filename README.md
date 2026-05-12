@@ -198,45 +198,80 @@ WHERE id = ? AND stock > 0
 
 ## 로컬 실행
 
-### 사전 요구사항
-
-- Docker Desktop
-- Java 17+
-- Node.js 18+
-
-### Docker Compose (단일 인스턴스)
+### clone 후 1회 실행
 
 ```bash
-cd fcfs-claim
+make hooks   # .githooks/pre-push 활성화 — push 시 테스트 자동 실행
+```
+
+### 사전 요구사항
+
+| 도구 | 버전 | 용도 |
+|------|------|------|
+| Docker Desktop | 최신 | MySQL·Redis 컨테이너, K8s |
+| Java | 17+ | 백엔드 빌드·실행 |
+| Node.js | 18+ | 프론트엔드 |
+| k6 | 최신 | 부하 테스트 (선택) |
+
+```bash
+brew install k6   # 부하 테스트가 필요한 경우
+```
+
+---
+
+### A. 개발 모드 (가장 빠른 시작)
+
+MySQL·Redis는 Docker로 띄우고, Spring Boot는 로컬에서 직접 실행한다. 코드 변경 후 재시작이 빠르다.
+
+```bash
+make dev
+```
+
+> `dev.sh` 내부 동작: `docker compose -f docker-compose.dev.yml up -d` → MySQL 준비 대기 → `./gradlew bootRun --args='--spring.profiles.active=local'`
+
+서버: `http://localhost:8081`
+
+---
+
+### B. Docker Compose (전체 스택)
+
+Nginx + 앱 + MySQL + Redis를 모두 컨테이너로 실행한다.
+
+```bash
+# 단일 인스턴스
 docker compose up --build
+
+# 다중 인스턴스 (SSE 멀티 인스턴스 테스트)
+docker compose up --build --scale app=2
 ```
 
 서버: `http://localhost:80` (Nginx) / `http://localhost:8081` (앱 직접)
 
-### Docker Compose (다중 인스턴스 — SSE 멀티 인스턴스 테스트)
+---
 
-```bash
-docker compose up --build --scale app=2
-```
-
-Nginx가 두 인스턴스에 라운드로빈으로 분산한다.
-
-### 백엔드 단독 실행 (개발용)
-
-```bash
-cd backend
-./gradlew bootRun
-```
-
-H2 인메모리 DB 사용, `http://localhost:8081`
-
-### 프론트엔드
+### C. 프론트엔드
 
 ```bash
 cd frontend
 npm install
 npx expo start --port 8082
 ```
+
+Expo Go 앱 또는 웹 브라우저에서 접속. 백엔드 URL은 `frontend/src/services/api.ts`에서 설정한다.
+
+---
+
+### Makefile 명령어
+
+| 명령어 | 설명 |
+|--------|------|
+| `make hooks` | Git 훅 설치 (clone 후 1회 실행) |
+| `make dev` | 개발 모드 (MySQL·Redis Docker + 백엔드 로컬) |
+| `make deploy` | K8s 이미지 빌드 + kubectl apply |
+| `make redeploy` | 이미지 재빌드 + K8s 롤링 업데이트 |
+| `make port` | K8s 서비스 포트포워딩 (8081) |
+| `make status` | K8s 파드·서비스·HPA 상태 출력 |
+| `make logs` | K8s 앱 파드 로그 스트리밍 |
 
 ---
 
@@ -322,8 +357,12 @@ k6 run k6/01_queue_stress.js
 |--------|------|-----------|-----------|
 | `ClaimServiceTest` | Mockito | 6 | 토큰 검증, 중복 수령, 재고 소진 시 Redis 미삭제 |
 | `QueueServiceTest` | Mockito | 6 | 대기열 입장, 상태 조회, 토큰 검증 |
-| `ProductRepositoryTest` | `@DataJpaTest` (H2) | 3 | 재고 차감 쿼리, **100스레드 동시성 검증** |
 | `EventLifecycleServiceTest` | Mockito | 4 | ShedLock 락 경합 스킵, 이벤트 상태 전이 |
+| `EventRecoveryServiceTest` | Mockito | 8 | 4시나리오 전체 (즉시종료·즉시활성화·캐시복원·스케줄등록) |
+| `QueueReadySubscriberTest` | Mockito | 4 | SSE 정상전송, null emitter, IOException, 잘못된 JSON |
+| `ActiveEventCacheTest` | 단위 | 5 | 동시 add/remove 경쟁 조건 (`@RepeatedTest(200)`), refresh(), getAll() 불변성 |
+| `SseEmitterStoreTest` | 단위 | 5 | 재연결 시 이전 emitter complete() 미호출 버그, put/get/remove, getByEventId() |
+| `ProductRepositoryTest` | `@DataJpaTest` (H2) | 3 | 재고 차감 쿼리, **100스레드 동시성 검증** |
 | `ClaimControllerTest` | `@WebMvcTest` | 3 | HTTP 상태 코드 매핑 |
 
 ### 테스트 계층 전략

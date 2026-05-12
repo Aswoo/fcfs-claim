@@ -3,7 +3,12 @@ IMAGE_BASE := fcfs-claim-app
 IMAGE_TAG  := $(shell date +%Y%m%d%H%M%S)
 IMAGE      := $(IMAGE_BASE):$(IMAGE_TAG)
 
-.PHONY: dev deploy redeploy port status logs experiment
+.PHONY: dev deploy redeploy port status logs experiment hooks
+
+# ── 초기 세팅 (clone 후 1회) ──────────────────────────
+hooks:
+	git config core.hooksPath .githooks
+	@echo "Git hooks installed. (.githooks/pre-push)"
 
 # ── 개발 ────────────────────────────────────────────
 dev:

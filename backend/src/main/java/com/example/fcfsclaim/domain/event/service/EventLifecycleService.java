@@ -9,7 +9,7 @@ import lombok.extern.slf4j.Slf4j;
 import net.javacrumbs.shedlock.core.LockConfiguration;
 import net.javacrumbs.shedlock.core.LockProvider;
 import net.javacrumbs.shedlock.core.SimpleLock;
-import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
@@ -25,24 +25,17 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public class EventLifecycleService {
 
-    private static final String QUEUE_ENDED_CHANNEL = "queue:ended";
-
     private final EventRepository eventRepository;
-    private final ActiveEventCache activeEventCache;
-    private final StringRedisTemplate redis;
+    private final ApplicationEventPublisher eventPublisher;
     private final SseEmitterStore emitterStore;
-    private final LockProvider lockProvider;  // ShedLock 프로그래매틱 API
+    private final LockProvider lockProvider;
 
-    // TaskScheduler에서 호출됨 (파드마다 각자 예약)
-    // → 여러 파드가 동시에 이 메서드를 호출하므로 ShedLock으로 1개만 실행
     public void activateEvent(Long eventId) {
-        // 락 이름을 동적으로 생성: "activateEvent-1", "activateEvent-2" ...
-        // @SchedulerLock 어노테이션은 상수 이름만 지원 → 프로그래매틱 API 필요
         Optional<SimpleLock> lock = lockProvider.lock(new LockConfiguration(
                 Instant.now(),
                 "activateEvent-" + eventId,
-                Duration.ofSeconds(30),   // lockAtMostFor: 비정상 종료 시 30초 후 자동 해제
-                Duration.ofSeconds(5)     // lockAtLeastFor: 최소 5초 락 유지
+                Duration.ofSeconds(30),
+                Duration.ofSeconds(5)
         ));
 
         if (lock.isEmpty()) {
@@ -63,11 +56,11 @@ public class EventLifecycleService {
         if (event == null || event.getStatus() != EventStatus.SCHEDULED) return;
 
         event.activate();
-        activeEventCache.add(eventId);  // 30초 기다리지 않고 즉시 캐시 반영
+        // AFTER_COMMIT 이후 EventLifecycleListener.onActivated() 에서 캐시 반영
+        eventPublisher.publishEvent(new EventActivatedEvent(eventId));
         log.info("이벤트 {} 활성화 완료", eventId);
     }
 
-    // end_at 정각에 TaskScheduler가 호출
     public void endEvent(Long eventId) {
         Optional<SimpleLock> lock = lockProvider.lock(new LockConfiguration(
                 Instant.now(),
@@ -94,13 +87,11 @@ public class EventLifecycleService {
         if (event == null || event.isEnded()) return;
 
         event.end();
-        activeEventCache.remove(eventId);               // 캐시 즉시 제거
-        redis.delete("queue:waiting:" + eventId);       // Redis 대기열 정리
-        redis.convertAndSend(QUEUE_ENDED_CHANNEL, String.valueOf(eventId)); // SSE 종료 알림
+        // AFTER_COMMIT 이후 EventLifecycleListener.onEnded() 에서 캐시 제거 + Redis 정리 + Pub/Sub 발행
+        eventPublisher.publishEvent(new EventEndedEvent(eventId));
         log.info("이벤트 {} 종료 완료", eventId);
     }
 
-    // 이벤트가 종료됐을 때 이 인스턴스에 연결된 SSE 전체에 알림
     public void notifyEventEnded(Long eventId) {
         Map<Long, SseEmitter> emitters = emitterStore.getByEventId(eventId);
         emitters.forEach((userId, emitter) -> {

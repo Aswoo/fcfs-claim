@@ -2,7 +2,7 @@ import http from 'k6/http';
 import { check, sleep } from 'k6';
 import { Counter } from 'k6/metrics';
 
-const BASE_URL = 'http://localhost:8081';
+const BASE_URL = __ENV.BASE_URL || 'http://localhost:8081';
 
 const successCount = new Counter('enter_success');
 const failCount = new Counter('enter_fail');

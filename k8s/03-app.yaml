@@ -13,10 +13,12 @@ spec:
       labels:
         app: fcfs-app
     spec:
+      imagePullSecrets:
+        - name: ecr-secret
       containers:
         - name: fcfs-app
-          image: docker.io/library/fcfs-claim-app:latest
-          imagePullPolicy: IfNotPresent
+          image: 990597228794.dkr.ecr.ap-northeast-2.amazonaws.com/fcfs-claim-app:latest
+          imagePullPolicy: Always
           env:
             - name: SPRING_PROFILES_ACTIVE
               value: docker
